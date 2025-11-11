@@ -1,1 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NationCloud — PDF Cloud</title>
+  <style>
+    :root{--bg:#070707;--card:#0f1113;--accent:#00ffcc;--muted:#9aa3a6}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#e6f7f2;font-family:Inter,Segoe UI,system-ui,Arial;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+    .wrap{width:100%;max-width:920px}
+    header{display:flex;gap:16px;align-items:center;margin-bottom:18px}
+    header img{height:56px;width:56px;object-fit:contain;border-radius:8px}
+    header h1{margin:0;font-size:20px;letter-spacing:0.6px;color:var(--accent)}
+
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:22px;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+    .login{max-width:480px;margin:auto}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type="password"]{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:#0b0b0b;color:#fff;font-size:15px}
+    button{margin-top:12px;padding:10px 14px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent),#00ccff);color:#001;cursor:pointer;font-weight:600}
+
+    #files{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+    .file{background:var(--card);padding:12px;border-radius:10px;display:flex;align-items:center;gap:12px}
+    .file .info{flex:1}
+    .file a{color:#bfffe8;text-decoration:none;font-weight:600}
+    .small{font-size:12px;color:var(--muted)}
+
+    .actions{display:flex;gap:8px;align-items:center}
+    .muted{color:var(--muted);font-size:13px}
+
+    footer{margin-top:14px;text-align:center;color:var(--muted);font-size:13px}
+
+    @media(max-width:540px){header h1{font-size:16px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <!-- Upload a file named `logo.png` in your repo root to show your logo here -->
+      <img id="logo" src="" alt="logo" onerror="this.style.display='none'">
+      <h1 id="title">NationCloud</h1>
+    </header>
+
+    <div class="card">
+      <!-- LOGIN CARD -->
+      <div id="loginCard" class="login">
+        <label for="pw">Enter password to access NationCloud</label>
+        <input id="pw" type="password" placeholder="Enter passphrase">
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <button id="loginBtn">Unlock</button>
+          <div class="muted">Protected • Client-side password</div>
+        </div>
+        <div id="loginError" class="small" style="color:#ff7b7b;margin-top:8px;display:none"></div>
+      </div>
+
+      <!-- FILE LIST -->
+      <div id="mainContent" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="muted">Your PDFs — click to download</div>
+          <div class="actions">
+            <button id="logoutBtn" style="padding:8px;border-radius:8px;border:0;cursor:pointer">Logout</button>
+          </div>
+        </div>
+
+        <div id="files"></div>
+        <footer>To add PDFs: upload files to this GitHub repo (root or a folder). The page auto-lists any .pdf files.</footer>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== CONFIG - edit these only if your GitHub username or repo name differs ======
+    const repoUser = "killa9121";    // 🔧 your GitHub username
+    const repoName = "nationcloud";  // 🔧 your repo name
+    const branch = "main";          // branch where files are stored
+
+    // Password (client-side). You set this to the value you gave me.
+    const PASSWORD = "Nationcloud1"; // 🔐 do NOT share this publicly if you want privacy
+
+    // ====== END CONFIG ======
+
+    const apiUrl = `https://api.github.com/repos/${repoUser}/${repoName}/contents/`;
+    const rawBase = `https://raw.githubusercontent.com/${repoUser}/${repoName}/${branch}/`;
+
+    const loginCard = document.getElementById('loginCard');
+    const mainContent = document.getElementById('mainContent');
+    const filesDiv = document.getElementById('files');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const pwInput = document.getElementById('pw');
+    const loginError = document.getElementById('loginError');
+
+    // show logo if present in repo as logo.png
+    const logoImg = document.getElementById('logo');
+    logoImg.src = rawBase + 'logo.png';
+
+    function showMain(){ loginCard.style.display='none'; mainContent.style.display='block'; }
+    function showLogin(){ loginCard.style.display='block'; mainContent.style.display='none'; }
+
+    function checkAuth(){
+      const ok = localStorage.getItem('nationcloud_auth') === '1';
+      if(ok) showMain(); else showLogin();
+      return ok;
+    }
+
+    async function loadFiles() {
+      filesDiv.innerHTML = '<div class="muted">Loading files…</div>';
+      try{
+        const res = await fetch(apiUrl);
+        if(!res.ok) throw new Error('GitHub API error');
+        const data = await res.json();
+        const pdfs = data.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+        if(pdfs.length === 0){ filesDiv.innerHTML = '<div class="muted">No PDFs found. Upload PDFs to the repo root to display them.</div>'; return }
+
+        filesDiv.innerHTML = '';
+        pdfs.forEach(p => {
+          const el = document.createElement('div'); el.className='file';
+          const info = document.createElement('div'); info.className='info';
+          const a = document.createElement('a'); a.href = p.download_url; a.target='_blank'; a.textContent = p.name;
+          const meta = document.createElement('div'); meta.className='small'; meta.textContent = `Size: ${Math.round(p.size/1024)} KB`;
+          info.appendChild(a); info.appendChild(meta);
+          el.appendChild(info);
+          filesDiv.appendChild(el);
+        });
+      }catch(err){ filesDiv.innerHTML = '<div class="muted">Could not load files. Make sure repo is public and the name is correct.</div>'; console.error(err) }
+    }
+
+    loginBtn.addEventListener('click', ()=>{
+      const val = pwInput.value || '';
+      if(val === PASSWORD){ localStorage.setItem('nationcloud_auth','1'); loginError.style.display='none'; showMain(); loadFiles(); pwInput.value=''; }
+      else { loginError.style.display='block'; loginError.textContent='Incorrect password.' }
+    });
+
+    logoutBtn.addEventListener('click', ()=>{ localStorage.removeItem('nationcloud_auth'); showLogin(); });
+
+    // initialize
+    (function(){
+      // If already logged in, load files
+      if(checkAuth()) loadFiles();
+    })();
+
+  </script>
+
+  <!--
+    Notes:
+    - Upload your PDFs and optional logo.png to the repo (root). The page auto-lists .pdf files.
+    - To change the password, edit the PASSWORD constant in this file and redeploy.
+    - This is a client-side password gate (stored in the browser). For stronger security, add a backend.
+  -->
+</body>
+</html>
 
